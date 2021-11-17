@@ -61,6 +61,41 @@ class SeasonIdentifier:
                 repr_str += self.data_labels[index] + " : " + str(self.data_list[index]) + "\n"
             return repr_str
 
+        def getFeaturesMax(self):
+            """
+            A function that returns an array containing the max value of all data contained in the
+            dataset
+
+            :return: An array with the max for all data
+            """
+
+            #For each feature get the index of the feature vector where the max value was measured
+            max_indices = np.argmax(self.data_list, axis=0)
+
+            #Use these indices to extract the actual maximum values per feature
+            max_values = []
+            for feature_index in range (0, self.data_list.shape[1]):
+                max_values.append(self.data_list[max_indices[feature_index]][feature_index])
+
+            return max_values
+
+        def getFeaturesMin(self):
+            """
+            A function that returns an array containing the min value of all data contained in the
+            dataset
+
+            :return: An array with the min for all data
+            """
+            # For each feature get the index of the feature vector where the min value was measured
+            max_indices = np.argmin(self.data_list, axis=0)
+
+            # Use these indices to extract the actual minimum values per feature
+            max_values = []
+            for feature_index in range(0, self.data_list.shape[1]):
+                max_values.append(self.data_list[max_indices[feature_index]][feature_index])
+
+            return max_values
+
     def addDataset(self, year, filepath):
         """
         A function that creates a new DataSet class instance and adds it to the
@@ -73,6 +108,27 @@ class SeasonIdentifier:
 
         # Create a new DataSet instance and add it to the dataset dictionary
         self.dataset_dict[year] = self.DataSet(filepath)
+
+
+
+    def getDistanceToAllPoints(self, year, point):
+        """
+        This function calculates the distance from each data input in the dataset for a
+        specified year from another data input using pythagoras.
+
+        :param the year of the specific dataset:
+        :param the point to which all distances are calculated:
+        :return:
+        """
+        min_feature_values = self.dataset_dict[year].getFeaturesMax()
+        max_feature_values = self.dataset_dict[year].getFeaturesMin()
+
+        print("Min feature values: {}".format(min_feature_values))
+        print("Max feature values: {}".format(max_feature_values))
+
+
+
+
 
     def printData(self):
         for year in self.dataset_dict:
@@ -87,3 +143,7 @@ season_identifier = SeasonIdentifier()
 season_identifier.addDataset(2000, "dataset_2000.csv")
 
 season_identifier.printData()
+
+test_data = [0, 0, 0, 0, 0, 0, 0]
+
+season_identifier.getDistanceToAllPoints(2000, test_data)
