@@ -1,5 +1,5 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 
 class SeasonIdentifier:
     """
@@ -13,6 +13,18 @@ class SeasonIdentifier:
         An initialization function
         """
         self.dataset_dict = {}  # The dataset containing the YearDataset instances
+
+
+    def printData(self):
+        """
+        A function to print all data contained in all datasets
+        :return:
+        """
+        for year in self.dataset_dict:
+            print("Year\t\t\t: " + str(year))
+            print(self.dataset_dict[year])
+
+
 
     class DataSet:
         """
@@ -51,8 +63,7 @@ class SeasonIdentifier:
             A function to print this instance and all it's data
             :return:
             """
-            repr_str = ""
-            repr_str += "Dataset class instance\n"
+            repr_str = "Dataset class instance\n"
             repr_str += "Days measured  : " + str(self.data_list.shape[0]) + "\n"
             repr_str += "Data amount    : " + str(self.data_list.size) + "\n"
             repr_str += "Data type      : " + str(self.data_list.dtype) + "\n"
@@ -60,6 +71,8 @@ class SeasonIdentifier:
             for index in range (0, len(self.data_list)):
                 repr_str += self.data_labels[index] + " : " + str(self.data_list[index]) + "\n"
             return repr_str
+
+
 
         def getFeaturesMax(self):
             """
@@ -120,30 +133,78 @@ class SeasonIdentifier:
         :param the point to which all distances are calculated:
         :return:
         """
+        #Calculate the minimal and maximum values for all features in all feature vectors in the specified dataset
         min_feature_values = self.dataset_dict[year].getFeaturesMax()
         max_feature_values = self.dataset_dict[year].getFeaturesMin()
 
-        print("Min feature values: {}".format(min_feature_values))
-        print("Max feature values: {}".format(max_feature_values))
+        # Calculate the range of all stored data
+        feature_range = np.subtract(max_feature_values, min_feature_values)
+
+        #Normalize the data point from which the distance will be calculated
+        point_norm = np.divide(np.subtract(point, min_feature_values), feature_range)
+
+        def calcDistances(index = 0):
+            """
+            A recursive function that calculates the distance from the provided reference point to all
+            normalized points of data in a dataset for the specified year
+            :param the index of the feature vector the function is to calculate the distance to:
+            :return a list of all currently calculated distances:
+            """
+            #If the distance to all data vectors has been calculated, return None
+            if(index >= len(self.dataset_dict[year].data_list)):
+                return None
+
+            #Normalize the point to which the index is pointing
+            data_norm = np.divide(np.subtract(self.dataset_dict[year].data_list[index], min_feature_values), feature_range)
+
+            #Substract normalized desired point from the normalized feature vector
+            data_cords = np.subtract(data_norm, point_norm)
+
+            #Use pythagoras to calculate the distance between the two points
+            current_distance = np.sum(list(map(lambda x: x * x, data_cords)))
+
+            #Increment the index and get the next distance
+            index += 1
+            next_distance = calcDistances((index))
+
+            # If the next next distance is not none, return it joined with the currently obtained distances. Otherwise
+            # return only the current distance stored within a list
+            return ([current_distance, *next_distance] if next_distance is not None else [current_distance])
+
+
+        distances = calcDistances()
+
+        #Zip the distances with the data labels in order to have the corresponding season per distance
+        labeled_distances = np.dstack((self.dataset_dict[year].data_labels, distances))
+
+        plt.plot(distances)
+
+        plt.show()
+
+
+        print(labeled_distances)
+
+        #print("Min feature values: {}".format(min_feature_values))
+        #print("Max feature values: {}".format(max_feature_values))
 
 
 
 
 
-    def printData(self):
-        for year in self.dataset_dict:
-            print(self.dataset_dict[year])
 
 
 
 #Create a SeasonIdentifier class instance
 season_identifier = SeasonIdentifier()
 
-#Read the data from the year 2000
+#Read the data from the year 2000. This is the training data
 season_identifier.addDataset(2000, "dataset_2000.csv")
 
-season_identifier.printData()
+#Read the data from the year 2001. This is the validation data
+season_identifier.addDataset(2001, "dataset_2001.csv")
 
-test_data = [0, 0, 0, 0, 0, 0, 0]
+#season_identifier.printData()
+
+test_data = np.array([0, 0, 0, 0, 0, 0, 0])
 
 season_identifier.getDistanceToAllPoints(2000, test_data)
