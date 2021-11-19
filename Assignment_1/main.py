@@ -109,6 +109,20 @@ class SeasonIdentifier:
 
             return max_values
 
+        def getNormalized(self):
+
+            # Calculate the minimal and maximum values for all features in all feature vectors
+            min_feature_values = self.getFeaturesMax()
+            max_feature_values = self.getFeaturesMin()
+
+            # Calculate the range of all stored data
+            feature_range = np.subtract(max_feature_values, min_feature_values)
+
+            normalized = []
+            for feature_vector in self.data_list:
+                
+
+
     def addDataset(self, year, filepath):
         """
         A function that creates a new DataSet class instance and adds it to the
@@ -122,6 +136,31 @@ class SeasonIdentifier:
         # Create a new DataSet instance and add it to the dataset dictionary
         self.dataset_dict[year] = self.DataSet(filepath)
 
+
+    def getDistanceBetweenPoints(self, point_1, point_2, max_range, min_range):
+        """
+        This function calculates the distance between two normalized points
+        :param point_1: The first point
+        :param point_2: The second point
+        :return: The distance between the two points
+        """
+
+        # Calculate the range of the data points
+        feature_range = np.subtract(max_range, min_range)
+
+        # Normalize the first point from which the distance will be calculated
+        point_1_norm = np.divide(np.subtract(point_1, min_range), feature_range)
+
+        # Normalize the second point to which the distance will be calculated
+        point_2_norm = np.divide(np.subtract(point_2, min_range), feature_range)
+
+        # Substract the first point from the second point
+        data_cords = np.subtract(point_2_norm, point_1_norm)
+
+        # Use pythagoras to calculate the distance between the two points
+        distance = np.sum(list(map(lambda x: x * x, data_cords)))
+
+        return distance
 
 
     def getDistanceToAllPoints(self, year, point):
@@ -154,18 +193,12 @@ class SeasonIdentifier:
             if(index >= len(self.dataset_dict[year].data_list)):
                 return None
 
-            #Normalize the point to which the index is pointing
-            data_norm = np.divide(np.subtract(self.dataset_dict[year].data_list[index], min_feature_values), feature_range)
 
-            #Substract normalized desired point from the normalized feature vector
-            data_cords = np.subtract(data_norm, point_norm)
-
-            #Use pythagoras to calculate the distance between the two points
-            current_distance = np.sum(list(map(lambda x: x * x, data_cords)))
+            current_distance = self.getDistanceBetweenPoints(point, self.dataset_dict[year].data_list[index], max_feature_values, min_feature_values)
 
             #Increment the index and get the next distance
             index += 1
-            next_distance = calcDistances((index))
+            next_distance = calcDistances(index)
 
             # If the next next distance is not none, return it joined with the currently obtained distances. Otherwise
             # return only the current distance stored within a list
@@ -184,8 +217,6 @@ class SeasonIdentifier:
 
         print(labeled_distances)
 
-        #print("Min feature values: {}".format(min_feature_values))
-        #print("Max feature values: {}".format(max_feature_values))
 
 
 
