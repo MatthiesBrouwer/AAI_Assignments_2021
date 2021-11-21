@@ -11,30 +11,12 @@ class DataSet:
     and stores them to be used by the SeasonIdentifier class.
     """
 
-    def __init__(self, filepath):
-
+    def __init__(self, data_list__init, data_labels__init):
         # Read the data from the file, excluding the first collumn as this contains
         # the data labels. Also, if the data in collumn 5 and 7 is <
-        self.data_list = np.genfromtxt(filepath,
-                                       delimiter=";",
-                                       usecols=[1, 2, 3, 4, 5, 6, 7],
-                                       converters={5: lambda s: 0 if s == b"-1" else float(s),
-                                                   7: lambda s: 0 if s == b"-1" else float(s)})
+        self.data_list = data_list__init
+        self.data_labels = data_labels__init
 
-        dates = np.genfromtxt(filepath, delimiter=";", usecols=[0])
-
-        self.data_labels = []
-        for label in dates:
-            if label < 20000301:
-                self.data_labels.append("winter")
-            elif 20000301 <= label < 20000601:
-                self.data_labels.append("spring")
-            elif 20000601 <= label < 20000901:
-                self.data_labels.append("summer")
-            elif 20000901 <= label < 20001201:
-                self.data_labels.append("fall")
-            else:  # from 01-12 to end of year
-                self.data_labels.append("winter")
 
     def __repr__(self):
         """
@@ -49,6 +31,33 @@ class DataSet:
         for index in range(0, len(self.data_list)):
             repr_str += self.data_labels[index] + " : " + str(self.data_list[index]) + "\n"
         return repr_str
+
+    def addData(self, filepath):
+        # Read the data from the file, excluding the first collumn as this contains
+        # the data labels. Also, if the data in collumn 5 and 7 is <
+
+        new_data = np.genfromtxt(filepath,
+                                       delimiter=";",
+                                       usecols=[1, 2, 3, 4, 5, 6, 7],
+                                       converters={5: lambda s: 0 if s == b"-1" else float(s),
+                                                   7: lambda s: 0 if s == b"-1" else float(s)})
+        print(new_data)
+        self.data_list = np.concatenate((self.data_list, new_data), axis = 0)
+
+        dates = np.genfromtxt(filepath, delimiter=";", usecols=[0])
+
+
+        for label in dates:
+            if label < 20000301:
+                self.data_labels.append("winter")
+            elif 20000301 <= label < 20000601:
+                self.data_labels.append("spring")
+            elif 20000601 <= label < 20000901:
+                self.data_labels.append("summer")
+            elif 20000901 <= label < 20001201:
+                self.data_labels.append("fall")
+            else:  # from 01-12 to end of year
+                self.data_labels.append("winter")
 
     def getFeaturesMax(self):
         """
@@ -92,15 +101,15 @@ class DataSet:
         """
 
         #Get the sum of all features per feature vector
-        row_sums = self.data_list.sum(axis=1)
+        #row_sums = self.data_list.sum(axis=1)
 
         #Use these feature sums to normalize the enire data list
-        new_matrix = self.data_list / row_sums[:, np.newaxis]
+        #new_matrix = self.data_list / row_sums[:, np.newaxis]
         #A = (self.data_list - np.mean(self.data_list)) / np.std(self.data_list)
         #print(A)
 
         normed_data = (self.data_list - self.data_list.min(0)) / self.data_list.ptp(0)
-        print(normed_data)
+        #print(normed_data)
         return normed_data
 
 
@@ -111,11 +120,11 @@ class SeasonIdentifier:
     when seasons start and end using a K-nearest neighbours algorithm.
     """
 
-    def __init__(self):
+    def __init__(self, dataset_training__init):
         """
         An initialization function
         """
-        self.trainingdata_dict = {}  # The dataset containing the YearDataset instances
+        self.training_data = dataset_training__init  # The dataset containing the YearDataset instances
 
 
     def printData(self):
@@ -123,23 +132,23 @@ class SeasonIdentifier:
         A function to print all data contained in all datasets
         :return:
         """
-        for year in self.trainingdata_dict :
-            print("Year\t\t\t: " + str(year))
-            print(self.trainingdata_dict[year])
+        #for year in self.trainingdata_dict :
+        #    print("Year\t\t\t: " + str(year))
+        #    print(self.trainingdata_dict[year])
+        print("Trainingsdata: {}".format(self.training_data))
 
 
-    def addTrainingdata(self, year, filepath):
+    def addTrainingdata(self, filepath):
         """
         A function that creates a new DataSet class instance and adds it to the
         dataset dictionary class attribute.
 
         Args:
-            year (int): the year when the weather data was measured
             filepath (string): The path to the weather data .csv file
         """
 
         # Create a new DataSet instance and add it to the dataset dictionary
-        self.trainingdata_dict[year] = DataSet(filepath)
+        self.training_data.AddData(filepath)
 
 
     def getDistanceBetweenPoints(self, point_1, point_2):
@@ -151,11 +160,21 @@ class SeasonIdentifier:
         """
 
         # Substract the first point from the second point
-        data_cords = np.subtract(point_1, point_2 )
+        data_cords = np.subtract(point_2, point_1 )
+        #print("point 1: {}".format(point_1))
+        #print("point 2: {}".format(point_2))
+        #print("data cords: {}".format(data_cords))
+        #for value in data_cords:
+        #    print(value, " * ", value, " = ", value*value)
 
+        #distance = np.hypot(point_1, point_2)
+        #print("distance: {}".format(distance))
+        # Use pythagoras to calculate the distance between the two points
         # Use pythagoras to calculate the distance between the two points
         #distance = np.sum(list(map(lambda x: x * x, data_cords)))
-        distance = np.linalg.norm(data_cords)
+        #print("distance 1: {}".format(distance))
+        distance = np.linalg.norm(point_1 - point_2)
+        #print("distance 2: {}".format(distance))
         return distance
 
 
@@ -169,15 +188,15 @@ class SeasonIdentifier:
         :return:
         """
         #Calculate the minimal and maximum values for all features in all feature vectors in the specified dataset
-        max_feature_values = self.trainingdata_dict[year].getFeaturesMax()
-        min_feature_values = self.trainingdata_dict[year].getFeaturesMin()
+        max_feature_values = self.training_data.getFeaturesMax()
+        min_feature_values = self.training_data.getFeaturesMin()
 
         # Calculate the range of all stored data
         feature_range = np.subtract(max_feature_values, min_feature_values)
 
         #Normalize the data point from which the distance will be calculated
         #point_norm = np.divide(np.subtract(point, self.trainingdata_dict[year].data_list.min(0)), self.trainingdata_dict[year].data_list.ptp(0))
-        point_norm = (point - self.trainingdata_dict[year].data_list.min(0)) / self.trainingdata_dict[year].data_list.ptp(0)
+        point_norm = (point - self.training_data.data_list.min(0)) / self.training_data.data_list.ptp(0)
         #point_norm = (point - (self.trainingdata_dict[year].data_list + [point]).min(0)) / (self.trainingdata_dict[year].data_list + [point]).ptp(0)
         #normed_data = (self.data_list - self.data_list.min(0)) / self.data_list.ptp(0)
 
@@ -187,8 +206,7 @@ class SeasonIdentifier:
 
 
         #Get a list of normalized feature vectors from the specified data set
-        feature_vectors_norm = self.trainingdata_dict[year].getNormalized()
-        print("before")
+        feature_vectors_norm = self.training_data.getNormalized()
         def calcDistances(index = 0):
             """
             A recursive function that calculates the distance from the provided reference point to all
@@ -197,12 +215,12 @@ class SeasonIdentifier:
             :return a list of all currently calculated distances:
             """
             #If the distance to all data vectors has been calculated, return None
-            if(index >= len(self.trainingdata_dict [year].data_list)):
+            if(index >= len(self.training_data.data_list)):
                 return None
 
             #Get the distance between the normalized point and the current feature vector
-            #current_distance = self.getDistanceBetweenPoints(point_norm, feature_vectors_norm[index])
-            current_distance = self.getDistanceBetweenPoints(point, self.trainingdata_dict[year].data_list[index])
+            current_distance = self.getDistanceBetweenPoints(point_norm, feature_vectors_norm[index])
+            #current_distance = self.getDistanceBetweenPoints(point, self.trainingdata_dict[year].data_list[index])
             #Increment the index and get the next distance
             index += 1
             next_distance = calcDistances(index)
@@ -230,7 +248,7 @@ class SeasonIdentifier:
         smallest_value_indexes = np.argpartition(distances, k)
 
         # Zip the distances with the data labels in order to have the corresponding season per distance
-        labeled_distances = np.column_stack((self.trainingdata_dict[2000].data_labels, distances))
+        labeled_distances = np.column_stack((self.training_data.data_labels, distances))
 
         #Extract the smallest distances and their corresponding seasons using the smallest value indexes
         nearest_neighbours = labeled_distances[smallest_value_indexes[:k]]
@@ -267,7 +285,7 @@ class SeasonIdentifier:
         season_count_sorted = season_count[np.argsort(season_count[:, 1])]
 
 
-        if( TEST_PRINTS):
+        if(not TEST_PRINTS):
             print("Counted seasons: ")
             print("\tWinter: {}".format(season_count[0][1]))
             print("\tSpring: {}".format(season_count[1][1]))
@@ -287,22 +305,27 @@ class SeasonIdentifier:
         """
         #Get the season estimation using the K-neares neighbour algorithm
 
-        correct_estimations = 0
-        print(validation_set.data_labels)
-        for index in range(0, len(validation_set.data_list)):
-            estimated_season = self.identifyFeatureVector(k, validation_set.data_list[index])
-            if(TEST_PRINTS):
-                print("Estimated season: {}".format(estimated_season))
-                print("Actual season:    {}".format(validation_set.data_labels[index]))
-                print()
-            if(estimated_season == validation_set.data_labels[index]):
-                correct_estimations += 1
+        succes_percentages = []
 
-        succes_percentage = (correct_estimations / len(validation_set.data_list)) * 100
+        for k_index in range(0, 80):
+            correct_estimations = 0
+            for index in range(0, len(validation_set.data_list)):
+                estimated_season = self.identifyFeatureVector(k_index, validation_set.data_list[index])
+                if(not TEST_PRINTS):
+                    print("Estimated season: {}".format(estimated_season))
+                    print("Actual season:    {}".format(validation_set.data_labels[index]))
+                    print()
+                if(estimated_season == validation_set.data_labels[index]):
+                    correct_estimations += 1
+
+            succes_percentages.append((correct_estimations / len(validation_set.data_list)) * 100)
 
         print("Total validation feature vectors: {}".format(len(validation_set.data_list)))
-        print("Correct estimations:              {}".format(correct_estimations))
-        print("Succes percentage:                {}".format(succes_percentage))
+        for index in range(0, len(succes_percentages)):
+            print("k({}) : {}".format(index, succes_percentages[index]))
+
+        #print("Correct estimations:              {}".format(correct_estimations))
+        #print("Succes percentage:                {}".format(succes_percentage))
 
         #estimated_season = self.identifyFeatureVector(k, validation_set.data_list[0])
         #print("Estimated season: {}".format(estimated_season))
@@ -310,18 +333,62 @@ class SeasonIdentifier:
 
 
 
+datalist_training  = np.genfromtxt("dataset_2000.csv",
+                                 delimiter=";",
+                                 usecols=[1, 2, 3, 4, 5, 6, 7],
+                                 converters={5: lambda s: 0 if s == b"-1" else float(s),
+                                             7: lambda s: 0 if s == b"-1" else float(s)})
+
+dates = np.genfromtxt("dataset_2000.csv", delimiter=";", usecols=[0])
+datalabels_training = []
+for label in dates:
+            if label < 20000301:
+                datalabels_training.append("winter")
+            elif 20000301 <= label < 20000601:
+                datalabels_training.append("spring")
+            elif 20000601 <= label < 20000901:
+                datalabels_training.append("summer")
+            elif 20000901 <= label < 20001201:
+                datalabels_training.append("fall")
+            else:  # from 01-12 to end of year
+                datalabels_training.append("winter")
+
+dataset_training = DataSet(datalist_training, datalabels_training)
+
+
+
+
+datalist_validation  = np.genfromtxt("dataset_2001.csv",
+                                 delimiter=";",
+                                 usecols=[1, 2, 3, 4, 5, 6, 7],
+                                 converters={5: lambda s: 0 if s == b"-1" else float(s),
+                                             7: lambda s: 0 if s == b"-1" else float(s)})
+
+dates = np.genfromtxt("dataset_2001.csv", delimiter=";", usecols=[0])
+datalabels_validation = []
+for label in dates:
+            if label < 20010301:
+                datalabels_validation.append("winter")
+            elif 20010301 <= label < 20010601:
+                datalabels_validation.append("spring")
+            elif 20010601 <= label < 20010901:
+                datalabels_validation.append("summer")
+            elif 20010901 <= label < 20011201:
+                datalabels_validation.append("fall")
+            else:  # from 01-12 to end of year
+                datalabels_validation.append("winter")
+
+dataset_validation = DataSet(datalist_validation, datalabels_validation)
 
 
 #Create a SeasonIdentifier class instance
-season_identifier = SeasonIdentifier()
+season_identifier = SeasonIdentifier(dataset_training)
 
-#Read the data from the year 2000. This is the training data
-season_identifier.addTrainingdata(2000, "dataset_2000.csv")
+
 
 #Read the data from the year 2001. This is the validation data
 #season_identifier.addTrainingdata(2001, "dataset_2001.csv")
-validation_set = DataSet("dataset_2001.csv")
-feature_vectors_norm = validation_set.getNormalized()
+#feature_vectors_norm = dataset_validation.getNormalized()
 
 
 
@@ -333,4 +400,4 @@ feature_vectors_norm = validation_set.getNormalized()
 
 #season_identifier.getDistanceToAllPoints(2000, test_data)
 #season_identifier.identifyFeatureVector(10, validation_set)
-season_identifier.evaluate(57, validation_set)
+season_identifier.evaluate(45, dataset_validation)
