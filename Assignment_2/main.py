@@ -1,4 +1,12 @@
 import numpy as np
+import random
+
+TEST_PRINTS = True
+
+
+def reportError(class_name, function_name, message):
+    raise Exception(class_name, ", ", function_name, " : ", message)
+
 
 class DataSet:
     """
@@ -61,13 +69,31 @@ class DataSet:
         datalist_normalized = range_min + nom / denom
         return datalist_normalized
 
-    def getDataByIndexes(self, indexes):
+    def normalizeData(self, range_min = 0, range_max = 1):
+        nom = (self.datalist - self.datalist.min(axis=0)) * (range_max - range_min)
+        denom = self.datalist.max(axis=0) - self.datalist.min(axis=0)
+        denom[denom == 0] = 1
+        self.datalist = range_min + nom / denom
+
+    def getDataByIndices(self, indices):
+        """
+        A function that returns an array containing the points of data at the provided indexes
+        Args:
+            indices: The indices of the desired points of data
+
+        Returns: The data at the provided indexes
+        """
+
+        #Initialize the guard clauses
+        if (np.max(indices) > len(self.datalist)):
+            reportError("Dataset", "getDataByIndices", "Requested index higher than available data")
+
+        return self.datalist[indices]
+
+    def getLabelsByIndices(self, indices):
         pass
 
-    def getLabelsByIndexes(self, indexes):
-        pass
-
-    def getLabeledDataByIndexes(self, indexes):
+    def getLabeledDataByIndices(self, indices):
         pass
 
     def normalizePoint(self, point, range_min = 0, range_max = 1):
@@ -96,38 +122,179 @@ class DataSet:
 
 class SeasonClusterer:
     def __init__(self):
-
         pass
+
 
     def evaluate(self, dataset, k_start, k_end):
-        pass
+        #Initialize guard clauses
+        if(k_end < k_start or k_start <= 1 or k_end <= 1):
+            self.reportError("SeasonClusterer", "evaluate", "Invalid k bounderies")
+        if(len(dataset.datalist) == 0):
+            self.reportError("SeasonClusterer", "evaluate", "Empty dataset provided")
+        if (k_end > len(dataset.datalist)):
+            self.reportError("SeasonClusterer", "evaluate", "Value for k is larger size of dataset")
 
-    def clusterDataset(self, k, dataset):
+        print("===========================")
+        print("----Starting evaluation----")
+        print("k start:\t{}".format(k_start))
+        print("k end:\t{}\n\n".format(k_end))
+
+        #Evaluate the values for k using the k-means clustering algorithm
+        for k_value in range(k_start, k_end + 1):
+
+            #Obtain the clusters and their intra_distance
+            self.clusterDataset(k_value, dataset)
+
+
+    def clusterDataset(self, k_value, dataset):
         #returns cluster details in array of tuples [mostcommonseason, intradistance]
         #calls assignDataPoint() to get the new cluster index. If one is diferent than
         #last call it loops. If none change it finishes
-        pass
 
-    def assignDatapoint(self, datapoint, cluster_centroids):
+        # Initialize guard clauses
+        if (k_value <= 1):
+            self.reportError("SeasonClusterer", "clusterDataset", "Invalid value for k")
+        if (len(dataset.datalist) == 0):
+            self.reportError("SeasonClusterer", "clusterDataset", "Empty dataset provided")
+        if(k_value > len(dataset.datalist)):
+            self.reportError("SeasonClusterer", "clusterDataset", "Value for k is larger size of dataset")
+
+        #Make sure the dataset is normalized
+        dataset.normalizeData()
+
+        # Pick k random points from the dataset to serve as starting positions for the centroids
+        centroids = random.choices(dataset.datalist, k=k_value)
+
+        #The following portion assigns the points of data to their closest centroid
+        #and afterwards reassigns each centroid to the mean of all points of data assigned to them.
+        #It continuously does this until no changes in datapoint assignments are occuring.
+
+        #Declare a variable that determines wether no datapoint's assigned centroid were changed during
+        #this rendition. If it's still true after all centroids were assigned, it breaks the loop
+        no_change = True
+
+        #An array where each index corresponds to the index of a datapoint in the dataset and each value to
+        #the index of their assigned centroid.
+        assigned_centroids = np.zeros(len(dataset.datalist))
+
+        max_iterations = 100000
+
+        for iteration in range (max_iterations):
+            #if no change occurs, stop iterating
+            no_change = True
+            print("Centroids: {}".format(centroids))
+            #iterate over all point of data
+            for datapoint_index in range(0, len(dataset.datalist)):
+
+                #Assign the datapoint at the current index and store it at the correct index
+                assigned_centroid_new = self.assignDatapoint(dataset.datalist[datapoint_index], centroids)
+
+                if(assigned_centroid_new != assigned_centroids[datapoint_index]):
+                    no_change = False
+                    assigned_centroids[datapoint_index] = assigned_centroid_new
+
+
+            #If no changes occcured during the entire process, break the loop
+            if(no_change):
+                break
+
+            #Otherwise, recalculate the centroid positions using the newly assigned means and redo the previous process
+            centroids = self.updateCentroids(k_value, assigned_centroids, dataset)
+
+
+
+        print(assigned_centroids)
+
+
+
+
+
+
+    def assignDatapoint(self, datapoint, centroids):
         #Uses the clusters to determine which cluster the datapoints belongs to and returns it
-        pass
 
-    def updateCentroids(self, assigned_indexes):
+        #Initialize the guard clauses
+        if(len(datapoint) == 0):
+            self.reportError("SeasonClusterer", "assignDatapoint", "Empty datapoint provided: {}".format(datapoint))
+        if(len(centroids) == 0):
+            self.reportError("SeasonClusterer", "assignDatapoint", "Empty centroid array provided: {}".format(centroids))
+
+        #A variable representing the minimal distance between the datapoint and a centroid
+        distance_minimum = 999999999
+        #A variable representing the index of the nearest centroid
+        nearest_centroid_index = -1
+
+        #Find the index of the nearest centroid
+        for centroid_index in range(0, len(centroids)):
+            #Get the euclidian distance between the datapoint and the current centroid
+            distance = self.calcEuclideanDistance(datapoint, centroids[centroid_index])
+
+            if(distance < distance_minimum):
+                distance_minimum = distance
+                nearest_centroid_index = centroid_index
+
+        #Return the index of the nearest centroid
+        return nearest_centroid_index
+
+    def updateCentroids(self, k_value, assigned_centroid_indexes, dataset):
         #Wants an array where the indexes relate to the
         #datapoint indexes and the data contained to which cluster they were assigned to.
         #This is represented as the index in the cluster array
         #It returns a new array containing the new centroids
-        pass
+
+        # Initialize the guard clauses
+        if (assigned_centroid_indexes.max(axis=0) > (k_value - 1)):
+            self.reportError("SeasonClusterer", "updateCentroids", "Value of k is lower than amount of assigned centroids")
+
+        #For each value of k representing the amount of centroids used, recalculate their centroid mean
+        centroids = []
+
+        for centroid_index in range(0, k_value):
+
+            #Get an array of the indexes all datapoints assigned to the centroid at the current index
+            assigned_datapoints_indexes = np.where(assigned_centroid_indexes == centroid_index)
+
+            #Get an array of the values of all datapoints assigned to the centroid at the current index
+            assigned_datapoints = dataset.getDataByIndices(assigned_datapoints_indexes)
+
+            # Calculate the mean of all assigned indexes
+            centroids.append(assigned_datapoints.mean(axis = 0))
+
+        return centroids
 
     def calcCentroidIntraDistance(self, assigned_indexes, cluster_centroids):
         #a function that calculates the intra distance between all clusters and their
         #assigned datapoints
+
         pass
+
+    def calcEuclideanDistance(self, point_1, point_2):
+        """
+        his function calculates the distance between two normalized points
+        :param point_1: The first point
+        :param point_2: The second point
+        :return: The distance between the two points
+        """
+
+        distance = np.linalg.norm(point_2 - point_1)
+        return distance
 
     def plotScreeGraph(self, intradistances):
         #A function that uses the provided array containing tuples of [k_value, intradistance]
         #to plot a scree array
+        pass
+
+#Set the random seed to 0
+random.seed(0)
 
 
+#Create a dataset to cluster
+dataset_2000 = DataSet(2000, "dataset_2000.csv")
+
+#Create the season clusterer
+season_clusterer = SeasonClusterer()
+
+#Cluster the dataset using the season clusterer
+season_clusterer.evaluate(dataset_2000, 4, 4)
 
 
