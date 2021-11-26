@@ -88,13 +88,37 @@ class DataSet:
         if (np.max(indices) > len(self.datalist)):
             reportError("Dataset", "getDataByIndices", "Requested index higher than available data")
 
+        #print("Data: {}".format(self.datalist[indices]))
+
         return self.datalist[indices]
 
     def getLabelsByIndices(self, indices):
-        pass
+        # Initialize the guard clauses
+        if (np.max(indices) > len(self.datalabels)):
+            reportError("Dataset", "getLabelsByIndices", "Requested index higher than available datalabels")
+
+        return self.datalabels[indices]
+
 
     def getLabeledDataByIndices(self, indices):
-        pass
+        # Initialize the guard clauses
+        if (np.max(indices) > len(self.datalabels)):
+            reportError("Dataset", "getLabeledDataByIndices", "Requested index higher than available datalabels")
+        if (np.max(indices) > len(self.datalist)):
+            reportError("Dataset", "getLabeledDataByIndices", "Requested index higher than available datalist")
+
+        #Get the data and labels using the indices
+        data = self.getDataByIndices(indices)
+        labels = self.getLabelsByIndices(indices)
+
+        labeled_data = []
+
+        for index in range(0, len(indices)):
+            labeled_data.append([labels[index], data[index]])
+
+        #Zip the data and labels arrays together
+        return labeled_data
+
 
     def normalizePoint(self, point, range_min = 0, range_max = 1):
         """
@@ -139,14 +163,27 @@ class SeasonClusterer:
         print("k start:\t{}".format(k_start))
         print("k end:\t{}\n\n".format(k_end))
 
+        # Make sure the dataset is normalized
+        dataset.normalizeData()
+
         #Evaluate the values for k using the k-means clustering algorithm
         for k_value in range(k_start, k_end + 1):
 
-            #Obtain the clusters and their intra_distance
-            self.clusterDataset(k_value, dataset)
+            #Obtain an array containing centroid indexes at the index corresponding to their assclusters and their intra_distance
 
+            #Cluster the dataset and obtain an array where each index corresponds to a piece of data and the value
+            #contained at the index to the centroid they were assigned to
+            clustered_datapoint_indices__total = self.clusterDataset(k_value, dataset, 4)
 
-    def clusterDataset(self, k_value, dataset):
+            print(clustered_datapoint_indices__total)
+            clusters_intradistance = self.calcTotalCentroidIntraDistance(k_value, clustered_datapoint_indices__total, dataset)
+            print("Total distance: {}".format(clusters_intradistance))
+
+            clusters_seasons = self.getClusterSeasons(k_value, clustered_datapoint_indices__total, dataset)
+
+            print("Cluster seasons: {}".format(clusters_seasons))
+
+    def clusterDataset(self, k_value, dataset, iterations = 1):
         #returns cluster details in array of tuples [mostcommonseason, intradistance]
         #calls assignDataPoint() to get the new cluster index. If one is diferent than
         #last call it loops. If none change it finishes
@@ -158,56 +195,91 @@ class SeasonClusterer:
             self.reportError("SeasonClusterer", "clusterDataset", "Empty dataset provided")
         if(k_value > len(dataset.datalist)):
             self.reportError("SeasonClusterer", "clusterDataset", "Value for k is larger size of dataset")
+        if (iterations < 1):
+            self.reportError("SeasonClusterer", "clusterDataset", "At least one iteration should be tried")
 
-        #Make sure the dataset is normalized
-        dataset.normalizeData()
+        #Initialize a variable to hold the best intradistance obtained during the k-means iterations
+        intradistance_min = 9223372036854775807
 
-        # Pick k random points from the dataset to serve as starting positions for the centroids
-        centroids = random.choices(dataset.datalist, k=k_value)
+        #Also initialize a variable to hold the assigned clusters array corresponding to the iterations with
+        #the best intradistance
+        assigned_centroids__best = []
 
-        #The following portion assigns the points of data to their closest centroid
-        #and afterwards reassigns each centroid to the mean of all points of data assigned to them.
-        #It continuously does this until no changes in datapoint assignments are occuring.
+        #Try multiple iterations of k-means, using different centroid starting positions each time
+        #and return the clusters with the lowest total intra distance
+        for iteration in range(0, iterations):
 
-        #Declare a variable that determines wether no datapoint's assigned centroid were changed during
-        #this rendition. If it's still true after all centroids were assigned, it breaks the loop
-        no_change = True
+            # Pick k random points from the dataset to serve as starting positions for the centroids
+            centroids = random.choices(dataset.datalist, k=k_value)
 
-        #An array where each index corresponds to the index of a datapoint in the dataset and each value to
-        #the index of their assigned centroid.
-        assigned_centroids = np.zeros(len(dataset.datalist))
+            #The following portion assigns the points of data to their closest centroid
+            #and afterwards reassigns each centroid to the mean of all points of data assigned to them.
+            #It continuously does this until no changes in datapoint assignments are occuring.
 
-        max_iterations = 100000
+            #An array where each index corresponds to the index of a datapoint in the dataset and each value to
+            #the index of their assigned centroid.
+            assigned_centroids = np.zeros(len(dataset.datalist))
 
-        for iteration in range (max_iterations):
-            #if no change occurs, stop iterating
-            no_change = True
-            print("Centroids: {}".format(centroids))
-            #iterate over all point of data
-            for datapoint_index in range(0, len(dataset.datalist)):
+            for iteration in range (0, 100000):
+                #if no change occurs, stop iterating
+                no_change = True
+                #print("Centroids: {}".format(centroids))
+                #iterate over all point of data
+                for datapoint_index in range(0, len(dataset.datalist)):
 
-                #Assign the datapoint at the current index and store it at the correct index
-                assigned_centroid_new = self.assignDatapoint(dataset.datalist[datapoint_index], centroids)
+                    #Assign the datapoint at the current index and store it at the correct index
+                    assigned_centroid_new = self.assignDatapoint(dataset.datalist[datapoint_index], centroids)
 
-                if(assigned_centroid_new != assigned_centroids[datapoint_index]):
-                    no_change = False
-                    assigned_centroids[datapoint_index] = assigned_centroid_new
-
-
-            #If no changes occcured during the entire process, break the loop
-            if(no_change):
-                break
-
-            #Otherwise, recalculate the centroid positions using the newly assigned means and redo the previous process
-            centroids = self.updateCentroids(k_value, assigned_centroids, dataset)
+                    if(assigned_centroid_new != assigned_centroids[datapoint_index]):
+                        no_change = False
+                        assigned_centroids[datapoint_index] = assigned_centroid_new
 
 
+                #If no changes occcured during the entire process, break the loop
+                if(no_change):
+                    break
 
-        print(assigned_centroids)
+                #Otherwise, recalculate the centroid positions using the newly assigned means and redo the previous process
+                centroids = self.updateCentroids(k_value, assigned_centroids, dataset)
 
 
+            #Calculate the intradistance of the current cluster formations. Store it and the assigned centroids array
+            #if it's the intradistance is lower than the previous lowest
+            intradistance_current = self.calcTotalCentroidIntraDistance(k_value, assigned_centroids, dataset)
+            if(intradistance_current < intradistance_min):
+                intradistance_min = intradistance_current
+                assigned_centroids__best = assigned_centroids
 
 
+        #return the assigned centroids
+        return assigned_centroids__best
+
+        """
+        #For each centroid, collect an array containing tuples of datalabel and datapoint for each point of data
+        #assigned to them.
+
+        #print("Assigned: {}".format(assigned_centroids))
+
+        for centroid_index in range(0, len(centroids)):
+            # Get an array of the indexes all datapoints assigned to the centroid at the current index
+
+            #Skip this step if no datapoints were assigned to a centroid
+            if not np.isin(centroid_index, assigned_centroids):
+                continue
+
+            #Get the indexes of the datapoints assigned to the centroid
+            assigned_datapoints_indexes = np.where(assigned_centroids == centroid_index)[0]
+
+            #Get an array of the datalabels and datapoints of all datapoints assigned to the centroid
+            labeled_datapoints = dataset.getLabeledDataByIndices(assigned_datapoints_indexes)
+            print(labeled_datapoints)
+
+
+        #Return a tuple. The first element contains a nested array of centroids, where their index represents the
+        #centroids index. The second element contains an array containing the assigned_centroids array.
+
+
+        """
 
 
     def assignDatapoint(self, datapoint, centroids):
@@ -226,6 +298,8 @@ class SeasonClusterer:
 
         #Find the index of the nearest centroid
         for centroid_index in range(0, len(centroids)):
+
+
             #Get the euclidian distance between the datapoint and the current centroid
             distance = self.calcEuclideanDistance(datapoint, centroids[centroid_index])
 
@@ -236,14 +310,14 @@ class SeasonClusterer:
         #Return the index of the nearest centroid
         return nearest_centroid_index
 
-    def updateCentroids(self, k_value, assigned_centroid_indexes, dataset):
+    def updateCentroids(self, k_value, assigned_centroid_indices, dataset):
         #Wants an array where the indexes relate to the
         #datapoint indexes and the data contained to which cluster they were assigned to.
         #This is represented as the index in the cluster array
         #It returns a new array containing the new centroids
 
         # Initialize the guard clauses
-        if (assigned_centroid_indexes.max(axis=0) > (k_value - 1)):
+        if (assigned_centroid_indices.max(axis=0) > (k_value - 1)):
             self.reportError("SeasonClusterer", "updateCentroids", "Value of k is lower than amount of assigned centroids")
 
         #For each value of k representing the amount of centroids used, recalculate their centroid mean
@@ -251,22 +325,96 @@ class SeasonClusterer:
 
         for centroid_index in range(0, k_value):
 
+            #Skip the recalculation if no datapoints were assigned to a centroid
+            if not np.isin(centroid_index, assigned_centroid_indices):
+                continue
+
             #Get an array of the indexes all datapoints assigned to the centroid at the current index
-            assigned_datapoints_indexes = np.where(assigned_centroid_indexes == centroid_index)
+            assigned_datapoints_indices = np.where(assigned_centroid_indices == centroid_index)
 
             #Get an array of the values of all datapoints assigned to the centroid at the current index
-            assigned_datapoints = dataset.getDataByIndices(assigned_datapoints_indexes)
+            assigned_datapoints = dataset.getDataByIndices(assigned_datapoints_indices)
 
             # Calculate the mean of all assigned indexes
             centroids.append(assigned_datapoints.mean(axis = 0))
 
         return centroids
 
-    def calcCentroidIntraDistance(self, assigned_indexes, cluster_centroids):
-        #a function that calculates the intra distance between all clusters and their
-        #assigned datapoints
+    def calcTotalCentroidIntraDistance(self, k_value, datapoint_clusters, dataset):
 
-        pass
+        #A value to hold the total intradistance between all clusters
+        intradistance_clusters = 0
+
+        # Calculate the intra distance of each cluster using their indices
+        for centroid_index in range(0, k_value):
+
+            # Skip this step if no datapoints were assigned to a centroid
+            if not np.isin(centroid_index, datapoint_clusters):
+                continue
+
+            # Get the indices of the datapoints assigned to the centroid
+            datapoint_indices__partial = np.where(datapoint_clusters == centroid_index)[0]
+
+            # Get the values of the datapoints assigned to the centroid using their indices
+            clustered_datapoint_values__partial = dataset.getDataByIndices(datapoint_indices__partial)
+
+            # Calculate the intra-distance for the current cluster and add it to the total
+            intradistance_clusters += self.calcCentroidIntraDistance(clustered_datapoint_values__partial)
+
+
+        return intradistance_clusters
+
+    def calcCentroidIntraDistance(self, datapoints):
+        #a function that calculates the intra distance between datapoints assigned to a cluster using an
+        #array of indices
+
+        # Initialize the guard clauses
+        if (len(datapoints) == 0):
+            reportError("SeasonClusterer", "calcCentroidIntraDistance", "No datapoints provided")
+
+        #Get the position of the centroid, which is at the mean of all datapoints
+        centroid = datapoints.mean(axis = 0)
+
+        def sumIntraDistances(index = 0):
+            #This function recursively calculates the distance from an assigned point to the centroid and adds it
+            #to the ones previously calculated until all have been calculated
+
+            #If all distances have been calculated, simply return 0
+            if index == len(datapoints):
+                return 0
+
+            #Calculate the squared euclidian distance between a point and the centroid
+            current_distance = np.square(self.calcEuclideanDistance(centroid, datapoints[index]))
+
+            return current_distance + sumIntraDistances(index + 1)
+
+        #Return the result from the recursive function above
+        return sumIntraDistances()
+
+
+    def getClusterSeasons(self, k_value, datapoint_clusters, dataset):
+
+        #An array to hold the season most common among datapoints assigned per cluster. The index of each cluster
+        #season corresponds to the cluster index
+        cluster_seasons = []
+
+        for centroid_index in range(0, k_value):
+
+            # Skip this step if no datapoints were assigned to a centroid
+            if not np.isin(centroid_index, datapoint_clusters):
+                cluster_seasons.append("NONE")
+                continue
+
+            # Get the indices of the datapoints assigned to the centroid
+            datapoint_indices__partial = np.where(datapoint_clusters == centroid_index)[0]
+
+            # Get an array of the datalabels of all datapoints assigned to the centroid at the current index
+            assigned_datapoint_labels = dataset.getLabelsByIndices(datapoint_indices__partial)
+
+
+            cluster_seasons.append(max(set(assigned_datapoint_labels), key = lambda season : ((assigned_datapoint_labels == season).sum())))
+
+        return cluster_seasons
 
     def calcEuclideanDistance(self, point_1, point_2):
         """
@@ -289,12 +437,10 @@ random.seed(0)
 
 
 #Create a dataset to cluster
-dataset_2000 = DataSet(2000, "dataset_2000.csv")
+dataset_2000 = DataSet(2001, "dataset_2001.csv")
 
 #Create the season clusterer
 season_clusterer = SeasonClusterer()
 
 #Cluster the dataset using the season clusterer
 season_clusterer.evaluate(dataset_2000, 4, 4)
-
-
